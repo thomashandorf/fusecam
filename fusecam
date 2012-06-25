@@ -1,0 +1,122 @@
+#!/usr/bin/perl
+use Image::ExifTool qw(:Public);
+use Data::Dumper;
+use Fuse;
+use Fcntl qw(:mode);
+use POSIX qw(ENOENT);
+use strict;
+
+our @dirs=('/media');
+#our @dirs=();
+our $fileRE='(jpg|jpeg|cr2|mpg|mov|avi)$';
+our @anum=(0..9,'A'..'Z');
+our %models=('SONYDSC-P200'=>'S','CanonCanon EOS 350D DIGITAL'=>'C','SONYDSC-WX1'=>'H','OLYMPUS IMAGING CORP.XZ-1'=>'O','CanonCanon PowerShot S100'=>'P');
+our $cache={};
+our $cache2={};
+our $target;
+our $mount=$ENV{HOME}."/fusemnt";
+if ($ARGV[0]){
+   push(@dirs,$ARGV[0]);
+}
+if ($ARGV[1]){
+   $mount=$ARGV[1];
+}
+
+# if ($ARGV[1]){
+#    $target=$ARGV[1];
+# }
+# die "no target '$target'" unless $target && (-d $target);
+
+# if ($ARGV[1]){
+#    @dirs=($ARGV[0]);
+#    $fileRE=$ARGV[1];
+# }
+
+sub load{
+   my @find=();
+   for my $d (@dirs){
+      push(@find,split(/\n/,`find '$d'`));
+   }
+#   print @find;
+   @find=grep {/$fileRE/i} @find;
+   my $tm=time;
+   for my $f (@find){
+      if (exists $cache2->{$f}){
+         $cache2->{$f}=$tm;
+         next;
+      }
+      $cache2->{$f}=$tm;
+      $f=~/(\d+)[^\/]*(\.\w+)$/;
+      my $num=$1;
+      $num=substr($num,-4) if length($num)>4; # no more than 4 digits;
+      my $ext=$2;
+      my $info = ImageInfo($f,'DateTimeOriginal','ISO','Flash','Model','Make','FileModifyDate');
+#      my $info = ImageInfo($f);
+#      print Dumper $info;
+      my @date;
+      if (exists $info->{'DateTimeOriginal'}){
+         @date=($info->{'DateTimeOriginal'}=~/(\d+)\:(\d+)\:(\d+)\s+(\d+)/);
+      } else {
+         @date=($info->{'FileModifyDate'}=~/(\d+)\:(\d+)\:(\d+)\s+(\d+)/);
+      }
+      $date[0]-=2000; #year
+      for my $i (0..3){$date[$i]=$anum[$date[$i]]};
+      my $date=join('',@date);
+      my $iso=$info->{ISO};
+      my $flash=(($info->{'Flash'}=~/not|off/i) ? '':'F');
+      $flash='' unless exists $info->{'Flash'};
+      my $model=$models{$info->{Make}.$info->{Model}};
+      $model='U' unless $model;
+      $iso=int($iso/100);
+      if ($iso<=16){
+         $iso=$anum[$iso];
+         $iso='' if $iso eq '0';
+      }
+      my $pre='IMG';
+      $pre='MOV' if $ext=~/mpg|mov|avi/i;
+      #next if $pre eq 'MOV';
+      my $newfn=$pre.$date.$num.$model.$iso.$flash.$ext;
+      $cache->{$newfn}={lnk=>$f,stats=>[stat($f)],time=>$tm};
+#      print "IMG".$date.$num.$model.$iso.$flash.$ext."\n";
+#      print $info->{'Flash'}.$flash."\n";
+#      system("ln -s $f $target/$newfn");
+   }
+   for my $k (keys %$cache){ 
+      # remove outdated
+      unless ($cache2->{$cache->{$k}->{lnk}}==$tm){
+         delete $cache2->{$cache->{$k}->{lnk}};
+         delete $cache->{$k};
+      }
+   }
+}
+sub e_getattr{
+#   print ">getattr",@_,"\n";
+   my $fn=shift;
+   if ($fn eq '/' || $fn eq '.' || $fn eq '..'){
+#      return (0,0,S_IFDIR | S_IRWXU,1,$>,$),0,1,1,1,1,1,1024);
+      return (0,0,S_IFDIR | 0644,1,0,0,0,1,1,1,1,1,1024);
+   }
+   $fn=~s,^/,,;
+#   print ">".$fn."\n";
+   return -ENOENT() unless exists $cache->{$fn};
+   my @sto=@{$cache->{$fn}->{stats}};
+   my @st=(0,0,S_IFLNK | 0644,1,0,0,0,1,$sto[8],$sto[9],$sto[10],1,1024);
+#   print scalar(@st);
+   return @st;
+}
+sub e_getdir{
+#   print "getdir",@_,"\n";
+   load();
+#   print Dumper $cache;
+   return ".","..",(keys %$cache),0;
+}
+sub e_readlink{
+#   print "readlink",@_,"\n";
+   my $fn=shift;
+   $fn=~s,^/,,;
+   return $cache->{$fn}->{lnk};
+}
+sub e_statfs { return 255, 1, 1, 1, 1, 2 }
+sub e_open {return 0};
+# debug=>5,
+Fuse::main(mountpoint=>$mount, mountopts=>"ro", getattr=>"main::e_getattr", getdir=>"main::e_getdir", readlink=>"main::e_readlink", statfs=>"main::e_statfs", open=>"main::e_open");
