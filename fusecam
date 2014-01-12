@@ -6,7 +6,7 @@ use Fcntl qw(:mode);
 use POSIX qw(ENOENT);
 use strict;
 
-our @dirs=('/media');
+our @dirs=('/media','/home/handorf/import');
 #our @dirs=();
 our $fileRE='(jpg|jpeg|cr2|mpg|mov|avi)$';
 our @anum=(0..9,'A'..'Z');
