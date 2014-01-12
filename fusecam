@@ -8,9 +8,9 @@ use strict;
 
 our @dirs=('/media','/home/handorf/import');
 #our @dirs=();
-our $fileRE='(jpg|jpeg|cr2|mpg|mov|avi)$';
+our $fileRE='(jpg|jpeg|cr2|mpg|mov|avi|mp4)$';
 our @anum=(0..9,'A'..'Z');
-our %models=('SONYDSC-P200'=>'S','CanonCanon EOS 350D DIGITAL'=>'C','SONYDSC-WX1'=>'H','OLYMPUS IMAGING CORP.XZ-1'=>'O','CanonCanon PowerShot S100'=>'P');
+our %models=('NIKON CORPORATIONNIKON D90'=>'M','SONYDSC-P200'=>'S','CanonCanon EOS 700D'=>'C','CanonCanon EOS 350D DIGITAL'=>'C','SONYDSC-WX1'=>'H','OLYMPUS IMAGING CORP.XZ-1'=>'O','CanonCanon PowerShot S100'=>'P','LGENexus 4'=>'N');
 our $cache={};
 our $cache2={};
 our $target;
